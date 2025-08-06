@@ -59,6 +59,12 @@ local colors = {
 	{0,.7,0},
 	{0,0,.7},
 }
+for _,color in ipairs(colors) do
+	for i=1,3 do
+		color[i] = math.floor(color[i] / .1 + .5) * .1
+	end
+end
+
 local colorCanvas = love.graphics.newCanvas(1000,1000)
 
 local font = love.graphics.setNewFont(50)
@@ -77,30 +83,29 @@ local charPause = {
 local timeOffset = 0
 local currentCharPause = 0
 
-local mouseColorName = ''
-local mouseColorTable
+local mouseColorIndex
 
 local function updateMouseColor()
+	print('updateMouseColor()',love.timer.getTime())
 	local mx, my = love.mouse.getPosition()
-	mouseColorName = nil
-	mouseColorTable = nil
+	mouseColorIndex = nil
 	local r, g, b, a = colorCanvas:newImageData():getPixel(mx, my)
 	r = math.floor(r / .1 + .5) * .1
 	g = math.floor(g / .1 + .5) * .1
 	b = math.floor(b / .1 + .5) * .1
-	for i,colorTable in ipairs(save.colorTables) do
-		if colorTable.color[1] == r
-		and colorTable.color[2] == g
-		and colorTable.color[3] == b then
-			mouseColorName = colorTable.name
-			mouseColorTable = colorTable
+	for i,color in ipairs(colors) do
+		print(i,'---')
+		print(color[1],color[2],color[3])
+		print(r,g,b)
+		if color[1] == r and color[2] == g and color[3] == b then
+			print('  ^ match')
+			mouseColorIndex = i
 			break
 		end
  	end
 end
 
 function love.draw()
-
 	-- drawing to the color canvas
 	local mx, my = love.mouse.getPosition()
 	if editorMode then
@@ -160,7 +165,7 @@ end
 
 function love.filedropped(file)
 	updateMouseColor()
-	if mouseColorTable then
+	if mouseColorIndex then
 		local path = file:getFilename()
 		local preSlash = 1
 		while true do
@@ -170,9 +175,8 @@ function love.filedropped(file)
 			end
 			preSlash = slash + 1
 		end
-
 		local filename = path:sub(preSlash, #path)
-		mouseColorTable.name = getName(filename)
+		save.colorTables[currentLocation][mouseColorIndex] = getName(filename)
 	end
 end
 

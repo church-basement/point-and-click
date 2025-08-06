@@ -77,9 +77,7 @@ function loadImage(name)
 				if love.filesystem.getInfo(path) then
 					colorCanvasImage = love.graphics.newImage(path)
 				end
-				if colorCanvasImage then
-					colorCanvas = love.graphics.newCanvas(1000, 1000)
-				end
+				colorCanvas = love.graphics.newCanvas(1000, 1000)
 				table.insert(imageHistory, name) 
 			elseif fileType == 'audio' then
 				local source = love.audio.newSource(path,'static')
@@ -221,8 +219,8 @@ function love.mousepressed(mx, my, btn)
 				textBoxTable.index = textBoxTable.index + 1
 				textBoxText = ''
 			end
-		elseif mouseColorName then
-			loadImage(mouseColorName)
+		elseif mouseColorIndex then
+			loadImage(save.colorTables[currentLocation][mouseColorIndex])
 		end
 	 end
 end

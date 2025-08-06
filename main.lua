@@ -6,6 +6,41 @@ local function getName(str)
 	return str:match('(.*)%..*$')
 end
 
+local brushIndex = 1
+local colors = {
+	{.7,.7,0},
+	{0,.7,.7},
+	{.7,0,.7},
+	{.7,0,0},
+	{0,.7,0},
+	{0,0,.7},
+}
+for _,color in ipairs(colors) do
+	for i=1,3 do
+		color[i] = math.floor(color[i] / .1 + .5) * .1
+	end
+end
+
+local colorCanvas
+
+local font = love.graphics.setNewFont(50)
+local fontHeight = font:getHeight('0')
+
+--
+
+local editorMode = false
+local textBoxText = ''
+local textBoxTable = {}
+local charPause = {
+	['.'] = 1/2,
+	[','] = 1/4,
+	[' '] = 0,
+}
+local timeOffset = 0
+local currentCharPause = 0
+
+local mouseColorIndex
+
 local currentImage
 local currentLocation = '1'
 local validExtrentions = {
@@ -14,6 +49,16 @@ local validExtrentions = {
 	['.txt']='txt',
 }
 
+love.filesystem.createDirectory('colorCanvases/')
+
+local function saveColorCanvas()
+	if colorCanvas then
+		local path = 'colorCanvases/'..currentLocation..'.png'
+		colorCanvas:newImageData():encode('png',path)
+	end
+end
+
+local colorCanvasImage
 local directory = 'media/'
 local imageHistory = {}
 function loadImage(name)
@@ -25,9 +70,17 @@ function loadImage(name)
 			local fileType = validExtrentions[extention]
 			print(fileType)
 			if fileType == 'image' then
-				currentImage = love.graphics.newImage(path)
-				table.insert(imageHistory, name) 
+				saveColorCanvas()
 				currentLocation = name
+				currentImage = love.graphics.newImage(path)
+				local path = 'colorCanvases/'..name..'.png'
+				if love.filesystem.getInfo(path) then
+					colorCanvasImage = love.graphics.newImage(path)
+				end
+				if colorCanvasImage then
+					colorCanvas = love.graphics.newCanvas(1000, 1000)
+				end
+				table.insert(imageHistory, name) 
 			elseif fileType == 'audio' then
 				local source = love.audio.newSource(path,'static')
 				source:play()
@@ -50,46 +103,16 @@ function loadImage(name)
 end
 loadImage(currentLocation)
 
-local brushIndex = 1
-local colors = {
-	{.7,.7,0},
-	{0,.7,.7},
-	{.7,0,.7},
-	{.7,0,0},
-	{0,.7,0},
-	{0,0,.7},
-}
-for _,color in ipairs(colors) do
-	for i=1,3 do
-		color[i] = math.floor(color[i] / .1 + .5) * .1
-	end
-end
 
-local colorCanvas = love.graphics.newCanvas(1000,1000)
-
-local font = love.graphics.setNewFont(50)
-local fontHeight = font:getHeight('0')
-
---
-
-local editorMode = false
-local textBoxText = ''
-local textBoxTable = {}
-local charPause = {
-	['.'] = 1/2,
-	[','] = 1/4,
-	[' '] = 0,
-}
-local timeOffset = 0
-local currentCharPause = 0
-
-local mouseColorIndex
 
 local function updateMouseColor()
 	print('updateMouseColor()',love.timer.getTime())
 	local mx, my = love.mouse.getPosition()
 	mouseColorIndex = nil
-	local r, g, b, a = colorCanvas:newImageData():getPixel(mx, my)
+	print(colorCanvas:getWidth(),colorCanvas:getHeight())
+	print(mx%1000, my%1000)
+	local r, g, b, a = colorCanvas:newImageData():getPixel(
+		mx%1000, my%1000)
 	r = math.floor(r / .1 + .5) * .1
 	g = math.floor(g / .1 + .5) * .1
 	b = math.floor(b / .1 + .5) * .1
@@ -106,6 +129,12 @@ local function updateMouseColor()
 end
 
 function love.draw()
+	if colorCanvasImage then
+		love.graphics.setCanvas(colorCanvas)
+		love.graphics.draw(colorCanvasImage)
+		colorCanvasImage = nil
+	end
+	
 	-- drawing to the color canvas
 	local mx, my = love.mouse.getPosition()
 	if editorMode then
@@ -212,8 +241,8 @@ function love.keypressed(key)
 	end
 end
 
---[[local buckWild = love.quit()
+local buckWild = love.quit
 function love.quit()
-	
+	saveColorCanvas()
 	buckWild()
-end]]
+end

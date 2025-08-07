@@ -1,11 +1,76 @@
 
 local save = require('save')
 save.colorTables = save.colorTables or {}
+save.currentLocation = save.currentLocation or '1'
+math.randomseed(os.time())
 
 local function getName(str)
 	return str:match('(.*)%..*$')
 end
 
+local function fitDimentions(w1,h1,w2,h2)
+	local ratio1 = w1/h1
+	local ratio2 = w2/h2
+	if ratio2 < ratio1 then
+		local scale = w2 / w1
+		return scale, 0, h2/2-h1*scale/2
+	else
+		local scale = h2 / h1
+		return scale, w2/2-w1*scale/2, 0
+	end
+end
+-- screen shinanigans
+local screenDiv = 5
+local screenHeight = 1080 / screenDiv
+local screenWidth = screenHeight * 3 / 2
+local screenRatio = screenWidth / screenHeight
+local screen = love.graphics.newCanvas(screenWidth,screenHeight)
+local ditheredScreen = love.graphics.newCanvas(screenWidth,screenHeight)
+ditheredScreen:setFilter('nearest','nearest')
+local screenScale
+local screenCanvas
+local screenCanvasWidth, screenCanvasHeight
+function love.resize(x,y)
+	local ratio = x/y
+	if screenRatio < ratio then
+		print('screenRatio < ratio')
+		screenCanvasHeight = y
+		screenCanvasWidth = y * 3 / 2
+	else
+		print('screenRatio > ratio')
+		print(x)
+		screenCanvasWidth = x
+		screenCanvasHeight = x * 2 / 3
+	end
+	screenCanvasWidth = math.max(
+		math.floor(screenCanvasWidth/screenWidth),
+		1)*screenWidth
+	screenCanvasHeight = math.max(
+		math.floor(screenCanvasHeight/screenHeight),
+		1)*screenHeight
+	screenCanvas = love.graphics.newCanvas(screenCanvasWidth,screenCanvasHeight)
+	screenScale = math.max(math.floor(screenCanvasWidth/screenWidth),1)
+	print(screenScale)
+end
+love.window.setMode(500,500,{resizable=true})
+love.resize(500,500)
+
+-- font
+local font = love.graphics.setNewFont(20)
+local fontHeight = font:getHeight('0')
+local editorMode = false
+-- text box
+local textBoxString = ''
+local textBoxText = love.graphics.newText(font)
+local textBoxTable = {}
+local charPause = {
+	['.'] = 1/2,
+	[','] = 1/4,
+	[' '] = 0,
+}
+local timeOffset = 0
+local currentCharPause = 0
+-- color stuff
 local brushIndex = 1
 local colors = {
 	{.7,.7,0},
@@ -20,31 +85,13 @@ for _,color in ipairs(colors) do
 		color[i] = math.floor(color[i] / .1 + .5) * .1
 	end
 end
-
 local colorCanvas
-
-local font = love.graphics.setNewFont(50)
-local fontHeight = font:getHeight('0')
-
---
-
-local editorMode = false
-local textBoxText = ''
-local textBoxTable = {}
-local charPause = {
-	['.'] = 1/2,
-	[','] = 1/4,
-	[' '] = 0,
-}
-local timeOffset = 0
-local currentCharPause = 0
-
 local mouseColorIndex
-
+local brushRadius = screenWidth / 30
+-- location vars
 local currentImage
-local currentLocation = '1'
 local validExtrentions = {
-	['.jpg']='image',['.png']='image',
+	['.jpg']='image', ['.png']='image',
 	['.wav']='audio',
 	['.txt']='txt',
 }
@@ -53,7 +100,7 @@ love.filesystem.createDirectory('colorCanvases/')
 
 local function saveColorCanvas()
 	if colorCanvas then
-		local path = 'colorCanvases/'..currentLocation..'.png'
+		local path = 'colorCanvases/'..save.currentLocation..'.png'
 		colorCanvas:newImageData():encode('png',path)
 	end
 end
@@ -62,165 +109,246 @@ local colorCanvasImage
 local directory = 'media/'
 local imageHistory = {}
 function loadImage(name)
+	print('go to '..'"'..name..'"')
 	for i,item in ipairs(love.filesystem.getDirectoryItems(directory)) do
-		print(name, item)
 		if name == getName(item) then
 			local extention = item:match('.*(%..*)$'):lower()
 			local path = directory..item
 			local fileType = validExtrentions[extention]
-			print(fileType)
 			if fileType == 'image' then
 				saveColorCanvas()
-				currentLocation = name
+				save.currentLocation = name
 				currentImage = love.graphics.newImage(path)
 				local path = 'colorCanvases/'..name..'.png'
 				if love.filesystem.getInfo(path) then
 					colorCanvasImage = love.graphics.newImage(path)
 				end
-				colorCanvas = love.graphics.newCanvas(1000, 1000)
+				colorCanvas = love.graphics.newCanvas(screenWidth, screenHeight)
 				table.insert(imageHistory, name) 
 			elseif fileType == 'audio' then
 				local source = love.audio.newSource(path,'static')
 				source:play()
 			elseif fileType == 'txt' then
+				-- parse text file and load it into the textbox
 				textBoxTable = {index = 1}
 				local str = love.filesystem.read(path)
 				local lastReturn = 1
 				while true do
 					local currReturn = str:find('\n',lastReturn)
-					table.insert(textBoxTable, str:sub(1,currReturn or #str))
+					table.insert(textBoxTable, str:sub(lastReturn,(currReturn or #str+1)-1))
 					if not currReturn then
 						break
 					end
 					lastReturn = currReturn + 1
 				end
+				local tempText = love.graphics.newText(font)
+				tempText:setf(textBoxTable[1],screenWidth/2,'left')
+				textBoxx = math.random()*(screenWidth-tempText:getWidth())
+				textBoxy = math.random()*(screenHeight-tempText:getHeight())
 			end
 		end
 	end
+end
+loadImage(save.currentLocation)
+
+-- Shader stuff -------------------------------------------------
+
+local ditherSize = math.floor(screenWidth/5)
+local imageData = love.image.newImageData(ditherSize,ditherSize)
+for x=0 ,ditherSize-1 do
+	for y = 0, ditherSize-1 do
+		local value = math.random()
+		imageData:setPixel(x,y,value,value,value,1)
+	end
+end
+local ditherTexture = love.graphics.newImage(imageData)
+local ditherShader = love.graphics.newShader([[
+uniform float width;
+uniform float height;
+uniform Image ditherTexture;
+uniform float ditherSize;
+
+vec4 effect(vec4 color, Image tex, vec2 texture_coords, vec2 screen_coords)
+{
+    vec4 rgba = Texel(tex, texture_coords);
+    vec2 chords = vec2(
+    	mod(texture_coords.x*width,ditherSize)/ditherSize, 
+    	mod(texture_coords.y*height,ditherSize)/ditherSize);
+    
+    rgba.rgb = rgba.rgb + (Texel(ditherTexture, chords).rgb * .1 - .05)  ;
+    rgba = rgba * color;
 	
-end
-loadImage(currentLocation)
-
-
-
-local function updateMouseColor()
-	print('updateMouseColor()',love.timer.getTime())
-	local mx, my = love.mouse.getPosition()
-	mouseColorIndex = nil
-	print(colorCanvas:getWidth(),colorCanvas:getHeight())
-	print(mx%1000, my%1000)
-	local r, g, b, a = colorCanvas:newImageData():getPixel(
-		mx%1000, my%1000)
-	r = math.floor(r / .1 + .5) * .1
-	g = math.floor(g / .1 + .5) * .1
-	b = math.floor(b / .1 + .5) * .1
-	for i,color in ipairs(colors) do
-		print(i,'---')
-		print(color[1],color[2],color[3])
-		print(r,g,b)
-		if color[1] == r and color[2] == g and color[3] == b then
-			print('  ^ match')
-			mouseColorIndex = i
-			break
-		end
- 	end
-end
+  	rgba.rgb = floor(rgba.rgb*7)/7;
+    
+    return rgba;
+}
+]])
+ditherShader:send('ditherTexture',ditherTexture)
+ditherShader:send('ditherSize',ditherSize)
+ditherShader:send('height',screenHeight)
+ditherShader:send('width',screenWidth)
 
 function love.draw()
+	local width, height = love.graphics.getWidth(), love.graphics.getHeight()
+	local ratio = width / height
+		
 	if colorCanvasImage then
 		love.graphics.setCanvas(colorCanvas)
-		love.graphics.draw(colorCanvasImage)
+		love.graphics.draw(colorCanvasImage,0,0,0,screenWidth/colorCanvasImage:getWidth())
 		colorCanvasImage = nil
 	end
 	
 	-- drawing to the color canvas
 	local mx, my = love.mouse.getPosition()
+	local scale,xOffset,yOffset = fitDimentions(screenWidth,screenHeight,width,height)
+	mx = (mx - xOffset) / scale
+	my = (my - yOffset) / scale
 	if editorMode then
 		love.graphics.setBlendMode('replace')
 		love.graphics.setCanvas(colorCanvas)
+		local color = colors[brushIndex]
 		if love.mouse.isDown(1) then
-			local color = colors[brushIndex]
 			love.graphics.setColor(color)
-			love.graphics.circle('fill', mx, my, 50)
-		end
-		if love.mouse.isDown(2) then
+			love.graphics.circle('fill', mx, my, brushRadius)
+		elseif love.mouse.isDown(2) then
 			love.graphics.setColor(0,0,0,0)
-			love.graphics.circle('fill', mx, my, 50)
+			love.graphics.circle('fill', mx, my, brushRadius*2)
 		end
 		love.graphics.setBlendMode('alpha')
 	end
 
 	love.graphics.setColor(1,1,1)
-	love.graphics.setCanvas()
-	love.graphics.draw(currentImage)
-
+	love.graphics.setCanvas(screen)
+	
+	-- draw image
+	local imgWidth,imgHeight = currentImage:getWidth(),currentImage:getHeight()
+	local imgRatio = imgWidth / imgHeight
+	local time = love.timer.getTime()*.5
+	local xOffset = math.sin(time)*.2
+	local yOffset = math.sin(time*2)*.1
+	local scale
+	if screenRatio > imgRatio then
+		scale = screenWidth / imgWidth
+		yOffset = yOffset + (screenHeight/2-imgHeight*scale/2)
+	else
+		scale = screenHeight / imgHeight
+		xOffset = xOffset + (screenWidth/2-imgWidth*scale/2)
+	end
+	love.graphics.draw(currentImage,xOffset,yOffset,0,scale)
+	
 	if editorMode then
 		love.graphics.setColor(1,1,1,.5)
 		love.graphics.draw(colorCanvas)
-		-- draw color names
-		save.colorTables[currentLocation] = save.colorTables[currentLocation] or {}
-		for i,name in ipairs(save.colorTables[currentLocation]) do
-			love.graphics.setColor(colors[i])
-			love.graphics.print(name, 0, (i-1)*fontHeight)
+		-- draw brush color box
+		local color = colors[brushIndex]
+		love.graphics.setColor(color[1],color[2],color[3],.5)
+		local boxWidth = 5
+		for i=0,6 do
+			love.graphics.rectangle('line',.5+i,.5+i,screenWidth-1-i*2,screenHeight-1-i*2)
 		end
-		-- draw box for context
-		local width, height = love.graphics.getWidth(), love.graphics.getHeight()
-		love.graphics.rectangle('line',1.5,1.5,width-2,height-2)
+		-- draw color names
+		save.colorTables[save.currentLocation] = save.colorTables[save.currentLocation] or {}
+		for i,name in pairs(save.colorTables[save.currentLocation]) do
+			local color = colors[i]
+			love.graphics.setColor(color[1],color[2],color[3],i==brushIndex and 1 or .25)
+			love.graphics.print(name, boxWidth*2, (i-1)*fontHeight+boxWidth*2)
+		end
+		-- draw brush previews
+		love.graphics.setColor(.5,.5,.5,.25)
+		if not love.mouse.isDown(2) then
+			love.graphics.circle('line', mx, my, brushRadius)
+		end
+		if not love.mouse.isDown(1) then
+			love.graphics.circle('line', mx, my, brushRadius*2)
+		end
 	else
-		updateMouseColor()
-	 	if mouseColorName then
-	 		love.graphics.setColor(1,1,1)
-			love.graphics.circle('line',mx,my,5)
-	 	end
+		if textBoxString == '' then
+			mouseColorIndex = nil
+			local r, g, b, a = colorCanvas:newImageData():getPixel(
+				mx%screenWidth, my%screenHeight)
+			r = math.floor(r / .1 + .5) * .1
+			g = math.floor(g / .1 + .5) * .1
+			b = math.floor(b / .1 + .5) * .1
+			for i,color in ipairs(colors) do
+				if color[1] == r and color[2] == g and color[3] == b then
+					mouseColorIndex = i
+					break
+				end
+		 	end
+		 	love.graphics.setColor(1,1,1)
+		 	if mouseColorIndex then
+				love.graphics.circle('line',mx,my,5)
+			else
+				love.graphics.circle('line',mx,my,2)
+		 	end
+		end
 	end
 
+	-- draw text
 	local targetString = textBoxTable[textBoxTable.index]--'aos.idjoijfeoiewjfoiewjf'
 	if targetString then
 		local time = love.timer.getTime() - timeOffset
 		if time > currentCharPause then
-			textBoxText = targetString:sub(1, #textBoxText+1)
-			local char = textBoxText:sub(#textBoxText, #textBoxText)
-			currentCharPause = charPause[char] or 1/10
-			
+			textBoxString = targetString:sub(1, #textBoxString+1)
+			local char = textBoxString:sub(#textBoxString, #textBoxString)
+			textBoxText:setf(textBoxString, screenWidth/2, 'left')
+			currentCharPause = charPause[char] or 1/20
 			timeOffset = love.timer.getTime()
 		end
 	end
-
 	love.graphics.setColor(1,1,1)
-	love.graphics.print(textBoxText, 0, fontHeight*3)
+	love.graphics.draw(textBoxText, textBoxx, textBoxy)--screenHeight-textBoxText:getHeight())
+
+	-- dither
+	love.graphics.setShader(ditherShader)
+	love.graphics.setCanvas(ditheredScreen)
+	love.graphics.draw(screen)
+	love.graphics.setShader()
+	
+	love.graphics.setCanvas(screenCanvas)
+	love.graphics.clear(1,0,0)
+	love.graphics.draw(ditheredScreen,0,0,0,screenScale)
+	
+	love.graphics.setCanvas()
+	if ratio < screenRatio then
+		local scale = width / screenCanvasWidth
+		love.graphics.draw(
+			screenCanvas,0,height/2-screenCanvasHeight*scale/2,0,scale)
+	else
+		local scale = height / screenCanvasHeight
+		love.graphics.draw(
+			screenCanvas,width/2-screenCanvasWidth*scale/2,0,0,scale)
+	end
 end
 
 function love.filedropped(file)
-	updateMouseColor()
-	if mouseColorIndex then
-		local path = file:getFilename()
-		local preSlash = 1
-		while true do
-			local slash = path:find('/', preSlash)
-			if not slash then
-				break
-			end
-			preSlash = slash + 1
+	local path = file:getFilename()
+	local preSlash = 1
+	while true do
+		local slash = path:find('/', preSlash)
+		if not slash then
+			break
 		end
-		local filename = path:sub(preSlash, #path)
-		save.colorTables[currentLocation][mouseColorIndex] = getName(filename)
+		preSlash = slash + 1
 	end
+	local filename = path:sub(preSlash, #path)
+	save.colorTables[save.currentLocation][brushIndex] = getName(filename)
 end
 
 function love.mousepressed(mx, my, btn)
 	if not editorMode then
-		if textBoxText ~= '' then
+		if textBoxString ~= '' then
 			local targetText = textBoxTable[textBoxTable.index]
-			if textBoxText ~= targetText then
+			if textBoxString ~= targetText then
 				-- finish current phrase
-				textBoxText = targetText
+				textBoxString = targetText
 			else
 				-- go to the next phrase
 				textBoxTable.index = textBoxTable.index + 1
-				textBoxText = ''
+				textBoxString = ''
 			end
 		elseif mouseColorIndex then
-			loadImage(save.colorTables[currentLocation][mouseColorIndex])
+			loadImage(save.colorTables[save.currentLocation][mouseColorIndex])
 		end
 	 end
 end
@@ -234,8 +362,15 @@ function love.keypressed(key)
 		loadImage(imageHistory[#imageHistory-1])
 		imageHistory[#imageHistory] = nil
 	end
+	if key == 'return' and love.keyboard.isDown('ralt') then
+		love.window.setFullscreen(not love.window.getFullscreen())
+	end
 	if tonumber(key) then
+		editorMode = true
 		brushIndex = (tonumber(key) -1) % #colors + 1
+	end
+	if key == 'escape' then	
+		love.event.quit()
 	end
 end
 

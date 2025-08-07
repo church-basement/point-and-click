@@ -108,8 +108,11 @@ end
 local colorCanvasImage
 local directory = 'media/'
 local sources = {}
-function loadImage(name)
-	print('go to '..'"'..name..'"')
+local locationHistory = {}
+function loadImage(name, noHistory)
+	if not name then return end
+	mouseRadius = 0
+	--print('go to '..'"'..name..'"')
 	for i,item in ipairs(love.filesystem.getDirectoryItems(directory)) do
 		if name == getName(item) then
 			local extention = item:match('.*(%..*)$'):lower()
@@ -127,6 +130,9 @@ function loadImage(name)
 				for _,source in ipairs(sources) do
 					source:stop()
 				end
+				if not noHistory then
+					table.insert(locationHistory, name)
+				end
 			elseif fileType == 'audio' then
 				local source = love.audio.newSource(path,'static')
 				source:play()
@@ -136,20 +142,49 @@ function loadImage(name)
 				textBoxTable = {index = 1}
 				local str = love.filesystem.read(path)
 				local lastReturn = 1
+				local maxWidth, maxHeight
+				local safty1 = 1
 				while true do
 					local currReturn = str:find('\n',lastReturn)
-					table.insert(
-						textBoxTable, 
-						str:sub(lastReturn,(currReturn or #str+1)-1))
+					local phrase = str:sub(lastReturn,(currReturn or #str+1)-1)
+					local preSpace = 0
+					local preReturn = 0
+					local safty2 = 1
+					local height = fontHeight
+					while true do
+						local space = phrase:find(' ',preSpace + 1)
+						local width = font:getWidth(
+							phrase:sub(1,(space or #phrase-1)+1)
+						)
+						if width > screenWidth/2 then
+							phrase = (
+								phrase:sub(1,preSpace-1)
+								..'\n'
+								..phrase:sub(preSpace+1,#phrase)
+							)
+							height = height + fontHeight
+						end
+						if not space then
+							break
+						end
+						preSpace = space
+						safty2 = safty2 + 1
+						assert(safty2 < 100,'oops.  runnaway function')
+					end
+					local width = font:getWidth(phrase)
+					maxWidth = math.max(maxWidth or width,width)
+					maxHeight = math.max(maxHeight or height,height)
+					table.insert(textBoxTable, phrase)
 					if not currReturn then
 						break
 					end
 					lastReturn = currReturn + 1
+					safty1 = safty1 + 1
+					assert(safty1 < 100,'oops.  runnaway function')
 				end
-				local tempText = love.graphics.newText(font)
-				tempText:setf(textBoxTable[1],screenWidth/2,'left')
-				textBoxx = math.random()*(screenWidth-tempText:getWidth())
-				textBoxy = math.random()*(screenHeight-tempText:getHeight())
+				print(maxHeight)
+				textBoxx = math.random()*(screenWidth-maxWidth or 0)
+				textBoxy = math.random()*(screenHeight-maxHeight or 0)
 			end
 		end
 	end
@@ -283,11 +318,14 @@ function love.draw()
 				end
 		 	end
 		 	love.graphics.setColor(1,1,1)
+		 	
+		 	local targetMouseRadius = 2
 		 	if mouseColorIndex then
-				love.graphics.circle('line',mx,my,5)
-			else
-				love.graphics.circle('line',mx,my,2)
+		 		targetMouseRadius = 5
 		 	end
+		 	mouseRadius = mouseRadius or 0
+		 	mouseRadius = mouseRadius + (targetMouseRadius-mouseRadius)*.4
+			love.graphics.circle('line',mx,my,mouseRadius)
 		end
 	end
 
@@ -298,13 +336,12 @@ function love.draw()
 		if time > currentCharPause then
 			textBoxString = targetString:sub(1, #textBoxString+1)
 			local char = textBoxString:sub(#textBoxString, #textBoxString)
-			textBoxText:setf(textBoxString, screenWidth/2, 'left')
 			currentCharPause = charPause[char] or 1/20
 			timeOffset = love.timer.getTime()
 		end
 	end
 	love.graphics.setColor(1,1,1)
-	love.graphics.draw(textBoxText, textBoxx, textBoxy)--screenHeight-textBoxText:getHeight())
+	love.graphics.print(textBoxString, textBoxx, textBoxy)--screenHeight-textBoxText:getHeight())
 
 	-- dither
 	love.graphics.setShader(ditherShader)
@@ -374,6 +411,10 @@ function love.keypressed(key)
 	end
 	if key == 'd' then
 		editorMode = not editorMode
+	end
+	if key == 'backspace' and #locationHistory>=2 then
+		loadImage(locationHistory[#locationHistory-1],true)
+		locationHistory[#locationHistory] = nil
 	end
 	if key == 'return' and love.keyboard.isDown('ralt') then
 		love.window.setFullscreen(not love.window.getFullscreen())

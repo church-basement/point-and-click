@@ -151,6 +151,7 @@ function loadImage(name, noHistory)
 					local preReturn = 0
 					local safty2 = 1
 					local height = fontHeight
+					-- make the phrase fit onto multiple lines
 					while true do
 						local space = phrase:find(' ',preSpace + 1)
 						local width = font:getWidth(
@@ -171,10 +172,13 @@ function loadImage(name, noHistory)
 						safty2 = safty2 + 1
 						assert(safty2 < 100,'oops.  runnaway function')
 					end
+					-- finalize phrase and add it to the table
 					local width = font:getWidth(phrase)
 					maxWidth = math.max(maxWidth or width,width)
 					maxHeight = math.max(maxHeight or height,height)
-					table.insert(textBoxTable, phrase)
+					if #phrase > 0 then
+						table.insert(textBoxTable, phrase)
+					end
 					if not currReturn then
 						break
 					end
@@ -277,6 +281,9 @@ function love.draw()
 		xOffset = xOffset + (screenWidth/2-imgWidth*scale/2)
 	end
 	love.graphics.draw(currentImage,xOffset,yOffset,0,scale)
+
+
+	
 	
 	if editorMode then
 		love.graphics.setColor(1,1,1,.5)
@@ -304,7 +311,21 @@ function love.draw()
 			love.graphics.circle('line', mx, my, brushRadius*2)
 		end
 	else
-		if textBoxString == '' then
+		-- draw text
+		local targetString = textBoxTable[textBoxTable.index]--'aos.idjoijfeoiewjfoiewjf'
+		if targetString then
+			local time = love.timer.getTime() - timeOffset
+			if time > currentCharPause then
+				textBoxString = targetString:sub(1, #textBoxString+1)
+				local char = textBoxString:sub(#textBoxString, #textBoxString)
+				currentCharPause = charPause[char] or 1/20
+				timeOffset = love.timer.getTime()
+			end
+		end
+		love.graphics.setColor(1,1,1)
+		love.graphics.print(textBoxString, textBoxx, textBoxy)--screenHeight-textBoxText:getHeight())
+	
+		if #textBoxString == 0 then
 			mouseColorIndex = nil
 			local r, g, b, a = colorCanvas:newImageData():getPixel(
 				mx%screenWidth, my%screenHeight)
@@ -329,21 +350,8 @@ function love.draw()
 		end
 	end
 
-	-- draw text
-	local targetString = textBoxTable[textBoxTable.index]--'aos.idjoijfeoiewjfoiewjf'
-	if targetString then
-		local time = love.timer.getTime() - timeOffset
-		if time > currentCharPause then
-			textBoxString = targetString:sub(1, #textBoxString+1)
-			local char = textBoxString:sub(#textBoxString, #textBoxString)
-			currentCharPause = charPause[char] or 1/20
-			timeOffset = love.timer.getTime()
-		end
-	end
-	love.graphics.setColor(1,1,1)
-	love.graphics.print(textBoxString, textBoxx, textBoxy)--screenHeight-textBoxText:getHeight())
-
 	-- dither
+	love.graphics.setColor(1,1,1)
 	love.graphics.setShader(ditherShader)
 	love.graphics.setCanvas(ditheredScreen)
 	love.graphics.draw(screen)
@@ -398,6 +406,7 @@ function love.mousepressed(mx, my, btn)
 				-- go to the next phrase
 				textBoxTable.index = textBoxTable.index + 1
 				textBoxString = ''
+				timeOffset = love.timer.getTime()-100
 			end
 		elseif mouseColorIndex then
 			loadImage(save.colorTables[save.currentLocation][mouseColorIndex])

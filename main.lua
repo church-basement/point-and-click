@@ -19,7 +19,8 @@ local function fitDimentions(w1,h1,w2,h2)
 		return scale, w2/2-w1*scale/2, 0
 	end
 end
--- screen shinanigans
+
+-- screen sizing shinanigans
 local screenDiv = 5
 local screenHeight = 1080 / screenDiv
 local screenWidth = screenHeight * 3 / 2
@@ -56,7 +57,7 @@ love.window.setMode(500,500,{resizable=true})
 love.resize(500,500)
 
 -- font
-local font = love.graphics.setNewFont(20)
+local font = love.graphics.setNewFont(15)
 local fontHeight = font:getHeight('0')
 local editorMode = false
 -- text box
@@ -222,7 +223,7 @@ vec4 effect(vec4 color, Image tex, vec2 texture_coords, vec2 screen_coords)
     rgba.rgb = rgba.rgb + (Texel(ditherTexture, chords).rgb * .1 - .05)  ;
     rgba = rgba * color;
 	
-  	rgba.rgb = floor(rgba.rgb*7)/7;
+  	rgba.rgb = floor(rgba.rgb*7.0)/7.0;
     
     return rgba;
 }

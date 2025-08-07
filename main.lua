@@ -92,7 +92,7 @@ local brushRadius = screenWidth / 30
 local currentImage
 local validExtrentions = {
 	['.jpg']='image', ['.png']='image',
-	['.wav']='audio',
+	['.wav']='audio', ['.ogg']='audio', ['.mp3'] = 'audio', ['.flac'] = 'audio',
 	['.txt']='txt',
 }
 
@@ -107,7 +107,7 @@ end
 
 local colorCanvasImage
 local directory = 'media/'
-local imageHistory = {}
+local sources = {}
 function loadImage(name)
 	print('go to '..'"'..name..'"')
 	for i,item in ipairs(love.filesystem.getDirectoryItems(directory)) do
@@ -124,10 +124,13 @@ function loadImage(name)
 					colorCanvasImage = love.graphics.newImage(path)
 				end
 				colorCanvas = love.graphics.newCanvas(screenWidth, screenHeight)
-				table.insert(imageHistory, name) 
+				for _,source in ipairs(sources) do
+					source:stop()
+				end
 			elseif fileType == 'audio' then
 				local source = love.audio.newSource(path,'static')
 				source:play()
+				table.insert(sources, source)
 			elseif fileType == 'txt' then
 				-- parse text file and load it into the textbox
 				textBoxTable = {index = 1}
@@ -135,7 +138,9 @@ function loadImage(name)
 				local lastReturn = 1
 				while true do
 					local currReturn = str:find('\n',lastReturn)
-					table.insert(textBoxTable, str:sub(lastReturn,(currReturn or #str+1)-1))
+					table.insert(
+						textBoxTable, 
+						str:sub(lastReturn,(currReturn or #str+1)-1))
 					if not currReturn then
 						break
 					end
@@ -188,6 +193,8 @@ ditherShader:send('ditherSize',ditherSize)
 ditherShader:send('height',screenHeight)
 ditherShader:send('width',screenWidth)
 
+
+local lastDropedTime = 0
 function love.draw()
 	local width, height = love.graphics.getWidth(), love.graphics.getHeight()
 	local ratio = width / height
@@ -319,6 +326,13 @@ function love.draw()
 		love.graphics.draw(
 			screenCanvas,width/2-screenCanvasWidth*scale/2,0,0,scale)
 	end
+
+	if not love.window.hasFocus() then
+		local color = colors[brushIndex]
+		local delta = love.timer.getTime()-lastDropedTime
+		love.graphics.setColor(color[1],color[2],color[3],math.min(delta, .5))
+		love.graphics.rectangle('fill',0,0,width, height)
+	end
 end
 
 function love.filedropped(file)
@@ -333,6 +347,7 @@ function love.filedropped(file)
 	end
 	local filename = path:sub(preSlash, #path)
 	save.colorTables[save.currentLocation][brushIndex] = getName(filename)
+	lastDropedTime = love.timer.getTime()
 end
 
 function love.mousepressed(mx, my, btn)
@@ -357,17 +372,15 @@ function love.keypressed(key)
 	if key == 'e' then
 		editorMode = not editorMode
 	end
-	if key == 'backspace' and #imageHistory > 1 then
-		print('go back!')
-		loadImage(imageHistory[#imageHistory-1])
-		imageHistory[#imageHistory] = nil
+	if key == 'd' then
+		editorMode = not editorMode
 	end
 	if key == 'return' and love.keyboard.isDown('ralt') then
 		love.window.setFullscreen(not love.window.getFullscreen())
 	end
 	if tonumber(key) then
 		editorMode = true
-		brushIndex = (tonumber(key) -1) % #colors + 1
+		brushIndex = (tonumber(key) - 1) % #colors + 1
 	end
 	if key == 'escape' then	
 		love.event.quit()

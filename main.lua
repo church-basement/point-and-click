@@ -1,8 +1,12 @@
 
+require('canvasWorkaround')
 local save = require('save')
 save.colorTables = save.colorTables or {}
 save.currentLocation = save.currentLocation or '1'
 math.randomseed(os.time())
+
+-- love handles ---------------------------------------------------------
+local lg = love.graphics
 
 local function getName(str)
 	return str:match('(.*)%..*$')
@@ -53,8 +57,8 @@ function love.resize(x,y)
 	screenScale = math.max(math.floor(screenCanvasWidth/screenWidth),1)
 	print(screenScale)
 end
-love.window.setMode(500,500,{resizable=true})
-love.resize(500,500)
+love.window.setMode(1280,720,{resizable=true})
+love.resize(1280,720)
 
 -- font
 local font = love.graphics.setNewFont(15)
@@ -196,6 +200,40 @@ function loadImage(name, noHistory)
 end
 loadImage(save.currentLocation)
 
+-------------------------------------------------------------------------------
+-- love functions -------------------------------------------------------------
+-------------------------------------------------------------------------------
+
+local songPaths = love.filesystem.getDirectoryItems('music')
+for i = #songPaths, 2, -1 do
+	local j = math.random(i)
+	songPaths[i], songPaths[j] = songPaths[j], songPaths[i]
+end
+local songSources = {}
+for i,path in ipairs(songPaths) do
+	songSources[i] = love.audio.newSource('music/'..path,'stream')
+end
+local songIndex = 1
+songSources[songIndex]:play()
+songSources[songIndex]:setVolume(0)
+local crossFadeTime = 5
+local vol = .25
+function love.update()
+	local song = songSources[songIndex]
+	local progress = song:tell()
+	local endVolume = (song:getDuration()-progress) *vol/crossFadeTime
+	song:setVolume(math.min(progress *vol/crossFadeTime, vol, endVolume))
+	local nextSongIndex = (songIndex)%#songSources+1
+	local nextSong = songSources[nextSongIndex]
+	print(nextSongIndex)
+	if endVolume <= vol then
+		if not nextSong:isPlaying() then
+			nextSong:play()
+		end
+		nextSong:setVolume(math.min(math.max(vol - endVolume,0),vol))
+	end
+end
+
 -- Shader stuff -------------------------------------------------
 
 local ditherSize = math.floor(screenWidth/5)
@@ -232,7 +270,16 @@ ditherShader:send('ditherTexture',ditherTexture)
 ditherShader:send('ditherSize',ditherSize)
 ditherShader:send('height',screenHeight)
 ditherShader:send('width',screenWidth)
-
+local invertShader = love.graphics.newShader([[
+uniform Image screenTexture;
+vec4 effect(vec4 color, Image tex, vec2 texture_coords, vec2 screen_coords)
+{
+    vec4 rgba = Texel(tex, texture_coords);
+    vec4 screenRgba = Texel(screenTexture, screen_coords);
+    
+    return rgba;
+}
+]])
 
 local lastDropedTime = 0
 function love.draw()
@@ -282,9 +329,6 @@ function love.draw()
 		xOffset = xOffset + (screenWidth/2-imgWidth*scale/2)
 	end
 	love.graphics.draw(currentImage,xOffset,yOffset,0,scale)
-
-
-	
 	
 	if editorMode then
 		love.graphics.setColor(1,1,1,.5)
@@ -312,7 +356,7 @@ function love.draw()
 			love.graphics.circle('line', mx, my, brushRadius*2)
 		end
 	else
-		-- draw text
+		-- draw text box
 		local targetString = textBoxTable[textBoxTable.index]--'aos.idjoijfeoiewjfoiewjf'
 		if targetString then
 			local time = love.timer.getTime() - timeOffset
@@ -325,16 +369,19 @@ function love.draw()
 		end
 		love.graphics.setColor(1,1,1)
 		love.graphics.print(textBoxString, textBoxx, textBoxy)--screenHeight-textBoxText:getHeight())
-	
+		-- find the mouseColorIndex
 		if #textBoxString == 0 then
 			mouseColorIndex = nil
 			local r, g, b, a = colorCanvas:newImageData():getPixel(
 				mx%screenWidth, my%screenHeight)
-			r = math.floor(r / .1 + .5) * .1
-			g = math.floor(g / .1 + .5) * .1
-			b = math.floor(b / .1 + .5) * .1
+			r = math.floor(r + .5)
+			g = math.floor(g + .5)
+			b = math.floor(b + .5)
+			--lg.print(r,mx,my)
+			--lg.print(g,mx,my+fontHeight)
+			--lg.print(b,mx,my+fontHeight+fontHeight)
 			for i,color in ipairs(colors) do
-				if color[1] == r and color[2] == g and color[3] == b then
+				if color[1] <= r and color[2] <= g and color[3] <= b then
 					mouseColorIndex = i
 					break
 				end

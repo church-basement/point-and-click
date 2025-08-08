@@ -22,7 +22,6 @@ function saveTable(t,p,maxTab,tab,str,exclude)
    
    -- loop through all values
    for key,value in pairs(t) do
-      if key == '_' then goto nextValue end
       local t = type(value)
       if type(key) == 'string' then
          key = '"'..key..'"'
@@ -32,18 +31,17 @@ function saveTable(t,p,maxTab,tab,str,exclude)
          str = str..tab..'['..key..'] = {\n'
          str = saveTable(value,p,maxTab,tab..'\t',str,exclude)
          str = str..tab..'},\n'
-         goto nextValue
-      end
-      if t ~= 'boolean' 
-      and t ~= 'number'
-      and t ~= 'string' then
-         goto nextValue
-      end
-      if t == 'string' then
-         value = '[['..value..']]'
-      end
-      str = str..tab..'['..key..'] = '..tostring(value)..',\n'
-      ::nextValue::
+      else
+	      if t ~= 'boolean' 
+	      and t ~= 'number'
+	      and t ~= 'string' then
+	      else
+		      if t == 'string' then
+		         value = '[['..value..']]'
+		      end
+		      str = str..tab..'['..key..'] = '..tostring(value)..',\n'
+	      end
+	   end
    end
    if tab == '\t' then
       str = str..'}'

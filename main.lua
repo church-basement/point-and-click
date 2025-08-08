@@ -128,17 +128,20 @@ local colorCanvasImage
 local directory = 'media/'
 local sources = {}
 local locationHistory = {}
+-- loadLocation function
 function loadLocation(location, noHistory)
 	if not location then return end
+	print('loadLocation()')
 	editorMode = false
 	mouseRadius = 0
 	--print('go to '..'"'..location..'"')
+	local loadedAImage = false
 	for i,item in ipairs(love.filesystem.getDirectoryItems(directory)) do
 		if location == getName(item) then
 			local extention = item:match('.*(%..*)$'):lower()
 			local path = directory..item
 			local fileType = validExtrentions[extention]
-			if fileType == 'image' then
+			if fileType == 'image' and not loadedAImage then
 				if not noHistory then
 					table.insert(locationHistory, save.currentLocation)
 				end
@@ -155,6 +158,7 @@ function loadLocation(location, noHistory)
 				for _,source in ipairs(sources) do
 					source:stop()
 				end
+				loadedAImage = true
 			elseif fileType == 'audio' then
 				local source = love.audio.newSource(path,'static')
 				source:play()
@@ -301,7 +305,7 @@ vec4 effect(vec4 drawColor, Image tex, vec2 texture_coords, vec2 screen_coords) 
     vec4 rgba = Texel(tex, texture_coords);
     vec4 noiseRgba = Texel(noise, screen_coords);
     vec4 finalRgba = background;
-    if (drawColor.r != 0) {
+    if (drawColor.r != 0.0) {
 		finalRgba = color*(rgba.a) + background*(1.0-rgba.a);
     }
     finalRgba.a = 0.8;
@@ -309,6 +313,10 @@ vec4 effect(vec4 drawColor, Image tex, vec2 texture_coords, vec2 screen_coords) 
 }
 ]])
 invertShader:send('noise',ditherTexture)
+
+-- voice logic
+local possibleVoices = love.filesystem.getDirectoryItems('voices/')
+local voices = 
 
 local colorData
 local lastDropedTime = 0

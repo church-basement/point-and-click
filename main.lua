@@ -25,7 +25,7 @@ local function fitDimentions(w1,h1,w2,h2)
 end
 
 -- screen sizing shinanigans
-local screenDiv = 5
+local screenDiv = 3
 local screenHeight = 1080 / screenDiv
 local screenWidth = screenHeight * 3 / 2
 local screenRatio = screenWidth / screenHeight
@@ -61,7 +61,7 @@ love.window.setMode(1280,720,{resizable=true})
 love.resize(1280,720)
 
 -- font
-local font = love.graphics.setNewFont(15)
+local font = love.graphics.setNewFont(15*(5/screenDiv))
 local fontHeight = font:getHeight('0')
 local editorMode = false
 -- text box
@@ -218,7 +218,7 @@ local songIndex = 1
 songSources[songIndex]:play()
 songSources[songIndex]:setVolume(0)
 local crossFadeTime = 5
-local vol = .25
+local vol = .01
 function love.update()
 	local song = songSources[songIndex]
 	local progress = song:tell()
@@ -226,7 +226,6 @@ function love.update()
 	song:setVolume(math.min(progress *vol/crossFadeTime, vol, endVolume))
 	local nextSongIndex = (songIndex)%#songSources+1
 	local nextSong = songSources[nextSongIndex]
-	print(nextSongIndex)
 	if endVolume <= vol then
 		if not nextSong:isPlaying() then
 			nextSong:play()
@@ -274,18 +273,31 @@ ditherShader:send('ditherTexture',ditherTexture)
 ditherShader:send('ditherSize',ditherSize)
 ditherShader:send('height',screenHeight)
 ditherShader:send('width',screenWidth)
+local invertCanvas = lg.newCanvas(screenWidth,screenHeight)
 local invertShader = love.graphics.newShader([[
 uniform Image screenTexture;
-vec4 effect(vec4 color, Image tex, vec2 texture_coords, vec2 screen_coords)
-{
+vec4 effect(vec4 color, Image tex, vec2 texture_coords, vec2 screen_coords) {
     vec4 rgba = Texel(tex, texture_coords);
-    vec4 screenRgba = Texel(screenTexture, screen_coords);
-    vec4 newScreenRgba = vec4(1-screenRgba.r,1-screenRgba.g,1-screenRgba.b,1);
-    vec4 finalRgba = vec4(1,1,1,1)*rgba.a + vec4(0,0,0,1)*(1-rgba.a) + screenRgba*.1;
-    return finalRgba;
+    vec4 normal = Texel(screenTexture, screen_coords);
+    vec4 background = normal;
+    normal = (normal)*.6;
+    normal.a = 1;
+    normal = normal * vec4(1.0, .9, .7, 1.0);
+    background = (background-.5)*.8+.5+.2;
+    background.a = 1;
+    background = background * vec4(1.0, 1.0, 1.0, 1.0);
+    vec4 finalRgba = normal*(rgba.a) + background*(1-rgba.a);
+    finalRgba.a = 1;
+    return finalRgba ;
 }
 ]])
 invertShader:send('screenTexture',screen)
+local lineShader = love.graphics.newShader([[
+uniform Image screenTexture;
+vec4 effect(vec4 color, Image tex, vec2 texture_coords, vec2 screen_coords) {
+    return color;
+}
+]])
 
 local lastDropedTime = 0
 function love.draw()
@@ -363,6 +375,7 @@ function love.draw()
 		end
 	else
 		lg.setShader(invertShader)
+		lg.setColor(1,0,0)
 		-- draw text box
 		local targetString = textBoxTable[textBoxTable.index]--'aos.idjoijfeoiewjfoiewjf'
 		if targetString then
@@ -374,9 +387,10 @@ function love.draw()
 				timeOffset = love.timer.getTime()
 			end
 		end
-		love.graphics.setColor(1,1,1)
+		lg.setColor(1,1,1,1)
 		love.graphics.print(textBoxString, textBoxx, textBoxy)--screenHeight-textBoxText:getHeight())
 		-- find the mouseColorIndex
+		lg.setShader(lineShader)
 		if #textBoxString == 0 then
 			mouseColorIndex = nil
 			local r, g, b, a = colorCanvas:newImageData():getPixel(
@@ -403,6 +417,7 @@ function love.draw()
 		 	mouseRadius = mouseRadius + (targetMouseRadius-mouseRadius)*.4
 			love.graphics.circle('line',mx,my,mouseRadius)
 		end
+		lg.setShader()
 	end
 
 	-- dither

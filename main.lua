@@ -282,7 +282,7 @@ vec4 effect(vec4 color, Image tex, vec2 texture_coords, vec2 screen_coords) {
     vec4 background = normal;
     normal = (normal)*.6;
     normal.a = 1;
-    normal = normal * vec4(1.0, .9, .7, 1.0);
+    normal = normal * vec4(1.0, .7, .5, 1.0);
     background = (background-.5)*.8+.5+.2;
     background.a = 1;
     background = background * vec4(1.0, 1.0, 1.0, 1.0);
@@ -306,6 +306,7 @@ function love.draw()
 		
 	if colorCanvasImage then
 		love.graphics.setCanvas(colorCanvas)
+		colorCanvasImage:setFilter('nearest','nearest')
 		love.graphics.draw(colorCanvasImage,0,0,0,screenWidth/colorCanvasImage:getWidth())
 		colorCanvasImage = nil
 	end

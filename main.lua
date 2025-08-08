@@ -218,7 +218,7 @@ local songIndex = 1
 songSources[songIndex]:play()
 songSources[songIndex]:setVolume(0)
 local crossFadeTime = 5
-local vol = .01
+local vol = .3
 function love.update()
 	local song = songSources[songIndex]
 	local progress = song:tell()
@@ -287,13 +287,15 @@ vec4 effect(vec4 color, Image tex, vec2 texture_coords, vec2 screen_coords) {
     background.a = 1;
     background = background * vec4(1.0, 1.0, 1.0, 1.0);
     vec4 finalRgba = normal*(rgba.a) + background*(1-rgba.a);
+    if (color.r == 0.0) {
+    	finalRgba = background;
+    }
     finalRgba.a = 1;
     return finalRgba ;
 }
 ]])
 invertShader:send('screenTexture',screen)
 local lineShader = love.graphics.newShader([[
-uniform Image screenTexture;
 vec4 effect(vec4 color, Image tex, vec2 texture_coords, vec2 screen_coords) {
     return color;
 }
@@ -376,7 +378,6 @@ function love.draw()
 		end
 	else
 		lg.setShader(invertShader)
-		lg.setColor(1,0,0)
 		-- draw text box
 		local targetString = textBoxTable[textBoxTable.index]--'aos.idjoijfeoiewjfoiewjf'
 		if targetString then
@@ -388,10 +389,9 @@ function love.draw()
 				timeOffset = love.timer.getTime()
 			end
 		end
-		lg.setColor(1,1,1,1)
+		lg.setColor(1,1,1)
 		love.graphics.print(textBoxString, textBoxx, textBoxy)--screenHeight-textBoxText:getHeight())
 		-- find the mouseColorIndex
-		lg.setShader(lineShader)
 		if #textBoxString == 0 then
 			mouseColorIndex = nil
 			local r, g, b, a = colorCanvas:newImageData():getPixel(
@@ -408,7 +408,7 @@ function love.draw()
 					break
 				end
 		 	end
-		 	love.graphics.setColor(1,1,1)
+		 	love.graphics.setColor(0,0,0)
 		 	
 		 	local targetMouseRadius = 2
 		 	if mouseColorIndex then

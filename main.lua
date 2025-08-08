@@ -211,6 +211,7 @@ for i = #songPaths, 2, -1 do
 end
 local songSources = {}
 for i,path in ipairs(songPaths) do
+	print(path)
 	songSources[i] = love.audio.newSource('music/'..path,'stream')
 end
 local songIndex = 1
@@ -231,6 +232,9 @@ function love.update()
 			nextSong:play()
 		end
 		nextSong:setVolume(math.min(math.max(vol - endVolume,0),vol))
+		if endVolume >= 0 then
+			songIndex = songIndex + 1
+		end
 	end
 end
 
@@ -276,10 +280,12 @@ vec4 effect(vec4 color, Image tex, vec2 texture_coords, vec2 screen_coords)
 {
     vec4 rgba = Texel(tex, texture_coords);
     vec4 screenRgba = Texel(screenTexture, screen_coords);
-    
-    return rgba;
+    vec4 newScreenRgba = vec4(1-screenRgba.r,1-screenRgba.g,1-screenRgba.b,1);
+    vec4 finalRgba = vec4(1,1,1,1)*rgba.a + vec4(0,0,0,1)*(1-rgba.a) + screenRgba*;
+    return finalRgba;
 }
 ]])
+invertShader:send('screenTexture',screen)
 
 local lastDropedTime = 0
 function love.draw()
@@ -356,6 +362,7 @@ function love.draw()
 			love.graphics.circle('line', mx, my, brushRadius*2)
 		end
 	else
+		lg.setShader(invertShader)
 		-- draw text box
 		local targetString = textBoxTable[textBoxTable.index]--'aos.idjoijfeoiewjfoiewjf'
 		if targetString then

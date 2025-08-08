@@ -65,9 +65,6 @@ function save.__load()
 	for k,v in pairs(table) do
 		save[k] = v
 	end
-	for k,v in pairs(save) do
-		print(k,v)
-	end
 end 
 
 function save.__save()

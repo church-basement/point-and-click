@@ -281,7 +281,7 @@ vec4 effect(vec4 color, Image tex, vec2 texture_coords, vec2 screen_coords)
     vec4 rgba = Texel(tex, texture_coords);
     vec4 screenRgba = Texel(screenTexture, screen_coords);
     vec4 newScreenRgba = vec4(1-screenRgba.r,1-screenRgba.g,1-screenRgba.b,1);
-    vec4 finalRgba = vec4(1,1,1,1)*rgba.a + vec4(0,0,0,1)*(1-rgba.a) + screenRgba*;
+    vec4 finalRgba = vec4(1,1,1,1)*rgba.a + vec4(0,0,0,1)*(1-rgba.a) + screenRgba*.1;
     return finalRgba;
 }
 ]])

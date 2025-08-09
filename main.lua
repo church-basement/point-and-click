@@ -164,6 +164,7 @@ function loadLocation(location, noHistory)
 				source:play()
 				table.insert(sources, source)
 			elseif fileType == 'txt' then
+				textBoxLocation = location
 				-- parse text file and load it into the textbox
 				textBoxTable = {index = 1}
 				local str = love.filesystem.read(path)
@@ -316,7 +317,15 @@ invertShader:send('noise',ditherTexture)
 
 -- voice logic
 local possibleVoices = love.filesystem.getDirectoryItems('voices/')
-local voices = 
+local voices = {}
+save.textBoxVoices = save.textBoxVoices or {}
+for _,voiceName in ipairs(possibleVoices) do
+	local voicePaths = love.filesystem.getDirectoryItems('voices/'..voiceName)
+	voices[voiceName] = {}
+	for _,voicePath in ipairs(voicePaths) do
+		table.insert(voices[voiceName],voicePath)
+	end
+end
 
 local colorData
 local lastDropedTime = 0
@@ -426,11 +435,32 @@ function love.draw()
 				textBoxString = ''
 			else
 				local time = love.timer.getTime() - timeOffset
-				if time > currentCharPause then
+				if time > currentCharPause
+				and textBoxString ~= targetString then
 					textBoxString = targetString:sub(1, #textBoxString+1)
 					local char = textBoxString:sub(#textBoxString, #textBoxString)
 					currentCharPause = charPause[char] or 1/20
 					timeOffset = love.timer.getTime()
+					-- what source do we use
+					if textBoxLocation ~= 'start' and textBoxLocation ~= 'start-bye'
+					and not char:match("%W") then
+						if type(save.textBoxVoices[textBoxLocation]) ~= 'table' then
+							save.textBoxVoices[textBoxLocation] = {
+								voiceName = possibleVoices[math.random(1,#possibleVoices)],
+								pitchMult = 2^(math.random()*2-math.random())
+							}
+						end
+						local voiceData = save.textBoxVoices[textBoxLocation]
+						local voiceTable = voices[voiceData.voiceName]
+						local source = love.audio.newSource(
+							(
+								'voices/'..voiceData.voiceName..'/'
+								..voiceTable[math.random(1,#voiceTable)]
+							),'static'
+						)
+						source:setPitch((math.random()*.1+1)*voiceData.pitchMult)
+						source:play()
+					end
 				end
 			end
 		end
@@ -579,7 +609,7 @@ function love.keypressed(key)
 		volTimer = love.timer.getTime()
 	end
 	if key == 'down' then
-		save.vol = math.floor(math.min(save.vol - .1,1)/.1)*.1
+		save.vol = math.floor(math.max(save.vol - .1,0)/.1)*.1
 		volTimer = love.timer.getTime()
 	end
 	if key == 'b' then
@@ -598,7 +628,12 @@ function love.keypressed(key)
 	if key == 'return' and love.keyboard.isDown('ralt') then
 		love.window.setFullscreen(not love.window.getFullscreen())
 	end
-	if tonumber(key) then
+	local keyValue = tonumber(key)
+	if keyValue then
+		if keyValue == brushIndex and editorMode then
+			editorMode = false
+			return
+		end
 		editorMode = true
 		brushIndex = (tonumber(key) - 1) % #colors + 1
 	end
